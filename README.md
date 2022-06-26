@@ -1,7 +1,7 @@
-# A cross-platform partial port of FiveDChessDataInterface
+# Cross-platform Partial Port of [FiveDChessDataInterface](https://github.com/GHXX/FiveDChessDataInterface)
 ![](https://github.com/NKID00/FiveDChessDataInterfaceCrossPlatform/actions/workflows/dotnet.yml/badge.svg?branch=master)
 
-A partial port of FiveDChessDataInterface which runs on Linux and Windows with the same dll file.
+A partial port of FiveDChessDataInterface which runs on Linux and Windows with the same .dll file.
 
 ## Important notes for Linux users
 
