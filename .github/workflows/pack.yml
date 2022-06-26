@@ -1,0 +1,31 @@
+name: Push NuGet Package
+
+on:
+  push:
+    tags:
+      - v*
+
+
+jobs:
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 3.1.x
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --no-restore -c Release
+
+    - name: Pack
+      run: |
+        TAG=${{ github.ref_name }}
+        dotnet pack FiveDChessDataInterface/FiveDChessDataInterface.csproj --no-build -c Release -o package /p:PackageVersion=${TAG:1}
+
+    - name: Push package
+      run: dotnet nuget push package/*.nupkg  --source https://nuget.pkg.github.com/NKID00/index.json   --api-key ${{ secrets.GITHUB_TOKEN }}
