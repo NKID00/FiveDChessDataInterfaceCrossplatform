@@ -4,6 +4,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <ApplicationManifest>Types\GameState.cs</ApplicationManifest>
     <LangVersion>8.0</LangVersion>
+    <RepositoryUrl>https://github.com/NKID00/FiveDChessDataInterfaceCrossplatform</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>

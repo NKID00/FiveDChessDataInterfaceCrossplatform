@@ -28,4 +28,4 @@ jobs:
         dotnet pack FiveDChessDataInterface/FiveDChessDataInterface.csproj --no-build -c Release -o package /p:PackageVersion=${TAG:1}
 
     - name: Push package
-      run: dotnet nuget push package/*.nupkg  --source https://nuget.pkg.github.com/NKID00/index.json   --api-key ${{ secrets.GITHUB_TOKEN }}
+      run: dotnet nuget push package/*.nupkg --source https://nuget.pkg.github.com/NKID00/index.json --api-key ${{ secrets.GITHUB_TOKEN }}
