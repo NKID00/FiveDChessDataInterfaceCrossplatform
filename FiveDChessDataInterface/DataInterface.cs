@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace FiveDChessDataInterface
@@ -98,7 +99,18 @@ namespace FiveDChessDataInterface
         public int GetCurT() => this.MemLocCurrentPlayersTurn.GetValue() == 0 ? GetWT() : GetBT();
 
 
-        public IntPtr GetGameHandle() => this.GameProcess.Handle;
+        public IntPtr GetGameHandle()
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return this.GameProcess.Handle;
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                return (IntPtr)this.GameProcess.Id;
+            }
+            return (IntPtr)0;
+        }
         public IntPtr GetEntryPoint() => this.GameProcess.MainModule.BaseAddress;
 
         public AssemblyHelper asmHelper;
@@ -163,7 +175,8 @@ namespace FiveDChessDataInterface
         {
             Thread.Sleep(250); // wait 250ms so that all read/write memory commands work fine
             CalculatePointers();
-            SetupAssemblyHelper();
+            // TODO: port to linux
+            // SetupAssemblyHelper();
         }
 
 
@@ -198,22 +211,30 @@ namespace FiveDChessDataInterface
 
         private void CalculatePointers()
         {
-            // standard 8x8, nonturnzero variant, 5 boards played
-            //CE - groupscan 4:0 4:0 4:0 4:0 w: 212 4:1 4:0 4:0 4:1 w: 212 4:2 4:0 4:1 4:0 w: 212 4:3 4:0 4:1 4:1
-            var bytesToFind = new byte?[] { 0x48, 0x8b, 0x0d, null, null, null, null, 0x49, 0x69 };
-
-
-            var results = MemoryUtil.FindMemoryWithWildcards(GetGameHandle(), GetEntryPoint(), (uint)this.GameProcess.MainModule.ModuleMemorySize, bytesToFind);
-
-            if (results.Count != 1)
+            IntPtr chessboardPointerLocation = IntPtr.Zero;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                throw new AmbiguousMatchException($"{results.Count} memory locations matched, which is not 1!");
-            }
+                // standard 8x8, nonturnzero variant, 5 boards played
+                //CE - groupscan 4:0 4:0 4:0 4:0 w: 212 4:1 4:0 4:0 4:1 w: 212 4:2 4:0 4:1 4:0 w: 212 4:3 4:0 4:1 4:1
+                var bytesToFind = new byte?[] { 0x48, 0x8b, 0x0d, null, null, null, null, 0x49, 0x69 };
 
-            var result = results.First();
-            var resultAddress = result.Key;
-            var resultBytes = result.Value;
-            var chessboardPointerLocation = IntPtr.Add(resultAddress, BitConverter.ToInt32(resultBytes, 3) + 7);
+
+                var results = MemoryUtil.FindMemoryWithWildcards(GetGameHandle(), GetEntryPoint(), (uint)this.GameProcess.MainModule.ModuleMemorySize, bytesToFind);
+
+                if (results.Count != 1)
+                {
+                    throw new AmbiguousMatchException($"{results.Count} memory locations matched, which is not 1!");
+                }
+
+                var result = results.First();
+                var resultAddress = result.Key;
+                var resultBytes = result.Value;
+                chessboardPointerLocation = IntPtr.Add(resultAddress, BitConverter.ToInt32(resultBytes, 3) + 7);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                chessboardPointerLocation = IntPtr.Add(GameProcess.MainModule.BaseAddress, 0x119250);
+            }
 
             this.MemLocChessArrayPointer = new MemoryLocation<IntPtr>(GetGameHandle(), chessboardPointerLocation);
             this.MemLocChessArrayElementCount = new MemoryLocation<int>(GetGameHandle(), chessboardPointerLocation, -8);
@@ -243,65 +264,67 @@ namespace FiveDChessDataInterface
 
 
 
-            //var timerMemoryAreaIncrementsArea_original = BitConverter.GetBytes((int)5).Cast<byte?>().Concat(Enumerable.Repeat((byte?)null, 14)).Concat(new byte?[] { 4, null }).Concat(BitConverter.GetBytes((int)8).Cast<byte?>()).ToArray();
-            //var timerMemoryAreaIncrementsResults_original = MemoryUtil.FindMemoryWithWildcards(GetGameHandle(), GetEntryPoint(), (uint)this.GameProcess.MainModule.ModuleMemorySize, timerMemoryAreaIncrementsArea_original);
-            //var invertedMask_original = Enumerable.Range(0, timerMemoryAreaIncrementsArea_original.Length).Select(x => timerMemoryAreaIncrementsArea_original[x] == null ? timerMemoryAreaIncrementsResults_original.Single().Value.ToArray()[x] : (byte?)null).ToArray();
-            //var productionMask_str = "new byte?[]{" + string.Join(",", invertedMask_original.Select(x => x == null ? "null" : $"0x{x:X2}")) + "}";
-
-            var productionMask = new byte?[] { null, null, null, null, 0x48, 0x0F, 0x45, 0xC8, 0x48, 0x89, 0x95, 0xA8, 0x00, 0x00, 0x00, 0x48, 0x83, 0xFA, null, 0xBA, null, null, null, null }; // = "productionMask_str"
-
-            var timerMemoryAreaIncrementsResults = MemoryUtil.FindMemoryWithWildcards(GetGameHandle(), GetEntryPoint(), (uint)this.GameProcess.MainModule.ModuleMemorySize, productionMask);
-
-            if (timerMemoryAreaIncrementsResults.Count != 1)
-                throw new AmbiguousMatchException($"{timerMemoryAreaIncrementsResults.Count} memory locations matched, which is not 1!");
-
-            // old byte array { 0x31, 0xC9, 0x48, 0x83, 0xF8, 0x02 };
-            //var timerMemoryArea_original = BitConverter.GetBytes((int)600).Cast<byte?>().Concat(Enumerable.Repeat((byte?)null, 9)).Concat(BitConverter.GetBytes((int)1200).Cast<byte?>()).ToArray();
-            //var timerResults_original = MemoryUtil.FindMemoryWithWildcards(GetGameHandle(), GetEntryPoint(), (uint)this.GameProcess.MainModule.ModuleMemorySize, timerMemoryArea_original);
-            //var timerResultsInvertedMask_original = Enumerable.Range(0, timerMemoryArea_original.Length).Select(x => timerMemoryArea_original[x] == null ? timerResults_original.Single().Value.ToArray()[x] : (byte?)null).ToArray();
-            //var timerResultsInvertedMask_str = "new byte?[]{" + string.Join(",", timerResultsInvertedMask_original.Select(x => x == null ? "null" : $"0x{x:X2}")) + "}";
-
-            var timerResultsMask = new byte?[] { null, null, null, null, 0x41, 0x0F, 0x45, 0xD0, 0x48, 0x83, 0xF9, 0x03, 0xBB, null, null, null, null }; // = "timerResultsInvertedMask_str"
-
-            var timerResults = MemoryUtil.FindMemoryWithWildcards(GetGameHandle(), GetEntryPoint(), (uint)this.GameProcess.MainModule.ModuleMemorySize, timerResultsMask);
-
-
-            if (timerResults.Count != 1)
+            // TODO: port to linux
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                throw new AmbiguousMatchException($"{timerResults.Count} memory locations matched, which is not 1!");
+                //var timerMemoryAreaIncrementsArea_original = BitConverter.GetBytes((int)5).Cast<byte?>().Concat(Enumerable.Repeat((byte?)null, 14)).Concat(new byte?[] { 4, null }).Concat(BitConverter.GetBytes((int)8).Cast<byte?>()).ToArray();
+                //var timerMemoryAreaIncrementsResults_original = MemoryUtil.FindMemoryWithWildcards(GetGameHandle(), GetEntryPoint(), (uint)this.GameProcess.MainModule.ModuleMemorySize, timerMemoryAreaIncrementsArea_original);
+                //var invertedMask_original = Enumerable.Range(0, timerMemoryAreaIncrementsArea_original.Length).Select(x => timerMemoryAreaIncrementsArea_original[x] == null ? timerMemoryAreaIncrementsResults_original.Single().Value.ToArray()[x] : (byte?)null).ToArray();
+                //var productionMask_str = "new byte?[]{" + string.Join(",", invertedMask_original.Select(x => x == null ? "null" : $"0x{x:X2}")) + "}";
+
+                var productionMask = new byte?[] { null, null, null, null, 0x48, 0x0F, 0x45, 0xC8, 0x48, 0x89, 0x95, 0xA8, 0x00, 0x00, 0x00, 0x48, 0x83, 0xFA, null, 0xBA, null, null, null, null }; // = "productionMask_str"
+
+                var timerMemoryAreaIncrementsResults = MemoryUtil.FindMemoryWithWildcards(GetGameHandle(), GetEntryPoint(), (uint)this.GameProcess.MainModule.ModuleMemorySize, productionMask);
+
+                if (timerMemoryAreaIncrementsResults.Count != 1)
+                    throw new AmbiguousMatchException($"{timerMemoryAreaIncrementsResults.Count} memory locations matched, which is not 1!");
+
+                // old byte array { 0x31, 0xC9, 0x48, 0x83, 0xF8, 0x02 };
+                //var timerMemoryArea_original = BitConverter.GetBytes((int)600).Cast<byte?>().Concat(Enumerable.Repeat((byte?)null, 9)).Concat(BitConverter.GetBytes((int)1200).Cast<byte?>()).ToArray();
+                //var timerResults_original = MemoryUtil.FindMemoryWithWildcards(GetGameHandle(), GetEntryPoint(), (uint)this.GameProcess.MainModule.ModuleMemorySize, timerMemoryArea_original);
+                //var timerResultsInvertedMask_original = Enumerable.Range(0, timerMemoryArea_original.Length).Select(x => timerMemoryArea_original[x] == null ? timerResults_original.Single().Value.ToArray()[x] : (byte?)null).ToArray();
+                //var timerResultsInvertedMask_str = "new byte?[]{" + string.Join(",", timerResultsInvertedMask_original.Select(x => x == null ? "null" : $"0x{x:X2}")) + "}";
+
+                var timerResultsMask = new byte?[] { null, null, null, null, 0x41, 0x0F, 0x45, 0xD0, 0x48, 0x83, 0xF9, 0x03, 0xBB, null, null, null, null }; // = "timerResultsInvertedMask_str"
+
+                var timerResults = MemoryUtil.FindMemoryWithWildcards(GetGameHandle(), GetEntryPoint(), (uint)this.GameProcess.MainModule.ModuleMemorySize, timerResultsMask);
+
+
+                if (timerResults.Count != 1)
+                {
+                    throw new AmbiguousMatchException($"{timerResults.Count} memory locations matched, which is not 1!");
+                }
+
+                // "fix" compiler optimizations (OLD CODE WHERE INCREMENTS AND BASE TIMES WERE IN THE SAME FUNC)
+                //var moddedCode = new byte[] { 0x31, 0xDB, 0x90, 0xBA, 0x05, 0x00, 0x00, 0x00, 0x48, 0x0F, 0x44, 0xCA, 0xBA, 0x58, 0x02, 0x00, 0x00 };
+
+                var moddedCode = new byte[] { 0x83, 0xFA, 0x02, 0x48, 0x31, 0xC9, 0xB8 }.Concat(BitConverter.GetBytes((int)3))
+                    .Concat(new byte[] { 0x0F, 0x45, 0xC8, 0x83, 0xFA, 0x03 }).ToArray();
+
+                KernelMethods.WriteMemory(GetGameHandle(), timerMemoryAreaIncrementsResults.Single().Key - 18, moddedCode);
+
+                var firstTimerBaseTime = IntPtr.Add(timerResults.Single().Key, timerResultsMask.Length + 4); // start postion of the null area
+
+
+                // RWX memlocs:
+                this.MemLocClock1BaseTime = new MemoryLocationRestorable<int>(GetGameHandle(), firstTimerBaseTime - 21);
+
+                this.MemLocClock2Increment = new MemoryLocationRestorable<int>(GetGameHandle(), timerMemoryAreaIncrementsResults.Single().Key);
+                this.MemLocClock1Increment = this.MemLocClock2Increment.WithOffset<int>(-11);
+
+                this.MemLocClock2BaseTime = this.MemLocClock1BaseTime.WithOffset<int>(13);
+
+                this.MemLocClock3Increment = this.MemLocClock2Increment.WithOffset<int>(20);
+                this.MemLocClock3BaseTime = this.MemLocClock2BaseTime.WithOffset<int>(12);
+
+                var clocklocAddresses = new[] { this.MemLocClock1BaseTime, this.MemLocClock2BaseTime, this.MemLocClock3BaseTime, this.MemLocClock1Increment, this.MemLocClock2Increment, this.MemLocClock3Increment }
+                    .Select(x => x.Location.ToInt64()).ToArray();
+
+                KernelMethods.ChangePageProtection(GetGameHandle(),
+                                                new IntPtr(clocklocAddresses.Min()),
+                                                (int)(clocklocAddresses.Max() - clocklocAddresses.Min()),
+                                                KernelMethods.FlPageProtect.PAGE_EXECUTE_READWRITE);
             }
-
-            // "fix" compiler optimizations (OLD CODE WHERE INCREMENTS AND BASE TIMES WERE IN THE SAME FUNC)
-            //var moddedCode = new byte[] { 0x31, 0xDB, 0x90, 0xBA, 0x05, 0x00, 0x00, 0x00, 0x48, 0x0F, 0x44, 0xCA, 0xBA, 0x58, 0x02, 0x00, 0x00 };
-
-            var moddedCode = new byte[] { 0x83, 0xFA, 0x02, 0x48, 0x31, 0xC9, 0xB8 }.Concat(BitConverter.GetBytes((int)3))
-                .Concat(new byte[] { 0x0F, 0x45, 0xC8, 0x83, 0xFA, 0x03 }).ToArray();
-
-            KernelMethods.WriteMemory(GetGameHandle(), timerMemoryAreaIncrementsResults.Single().Key - 18, moddedCode);
-
-            var firstTimerBaseTime = IntPtr.Add(timerResults.Single().Key, timerResultsMask.Length + 4); // start postion of the null area
-
-
-            // RWX memlocs:
-            this.MemLocClock1BaseTime = new MemoryLocationRestorable<int>(GetGameHandle(), firstTimerBaseTime - 21);
-
-            this.MemLocClock2Increment = new MemoryLocationRestorable<int>(GetGameHandle(), timerMemoryAreaIncrementsResults.Single().Key);
-            this.MemLocClock1Increment = this.MemLocClock2Increment.WithOffset<int>(-11);
-
-            this.MemLocClock2BaseTime = this.MemLocClock1BaseTime.WithOffset<int>(13);
-
-            this.MemLocClock3Increment = this.MemLocClock2Increment.WithOffset<int>(20);
-            this.MemLocClock3BaseTime = this.MemLocClock2BaseTime.WithOffset<int>(12);
-
-            var clocklocAddresses = new[] { this.MemLocClock1BaseTime, this.MemLocClock2BaseTime, this.MemLocClock3BaseTime, this.MemLocClock1Increment, this.MemLocClock2Increment, this.MemLocClock3Increment }
-                .Select(x => x.Location.ToInt64()).ToArray();
-
-            KernelMethods.ChangePageProtection(GetGameHandle(),
-                                               new IntPtr(clocklocAddresses.Min()),
-                                               (int)(clocklocAddresses.Max() - clocklocAddresses.Min()),
-                                               KernelMethods.FlPageProtect.PAGE_EXECUTE_READWRITE);
-
-
         }
 
         /// <summary>

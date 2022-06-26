@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace DataInterfaceConsole.Actions.Settings
 {
@@ -74,42 +75,45 @@ namespace DataInterfaceConsole.Actions.Settings
                 if (ttanim != "ignore")
                     di.MemLocTimeTravelAnimationEnabled.SetValue(ttanim == "always_on" ? 1 : 0);
 
-                var sv1t = (this.settingsStore["Clock1BaseTime"] as SettingsValuePrimitive<int?>).Value;
-                if (sv1t.HasValue)
-                    di.MemLocClock1BaseTime.SetValue(sv1t.Value);
-                else
-                    di.MemLocClock1BaseTime.RestoreOriginal();
+                // TODO: port to linux
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    var sv1t = (this.settingsStore["Clock1BaseTime"] as SettingsValuePrimitive<int?>).Value;
+                    if (sv1t.HasValue)
+                        di.MemLocClock1BaseTime.SetValue(sv1t.Value);
+                    else
+                        di.MemLocClock1BaseTime.RestoreOriginal();
 
-                var sv1i = (this.settingsStore["Clock1Increment"] as SettingsValuePrimitive<int?>).Value;
-                if (sv1i.HasValue)
-                    di.MemLocClock1Increment.SetValue(sv1i.Value);
-                else
-                    di.MemLocClock1Increment.RestoreOriginal();
+                    var sv1i = (this.settingsStore["Clock1Increment"] as SettingsValuePrimitive<int?>).Value;
+                    if (sv1i.HasValue)
+                        di.MemLocClock1Increment.SetValue(sv1i.Value);
+                    else
+                        di.MemLocClock1Increment.RestoreOriginal();
 
-                var sv2t = (this.settingsStore["Clock2BaseTime"] as SettingsValuePrimitive<int?>).Value;
-                if (sv2t.HasValue)
-                    di.MemLocClock2BaseTime.SetValue(sv2t.Value);
-                else
-                    di.MemLocClock2BaseTime.RestoreOriginal();
+                    var sv2t = (this.settingsStore["Clock2BaseTime"] as SettingsValuePrimitive<int?>).Value;
+                    if (sv2t.HasValue)
+                        di.MemLocClock2BaseTime.SetValue(sv2t.Value);
+                    else
+                        di.MemLocClock2BaseTime.RestoreOriginal();
 
-                var sv2i = (this.settingsStore["Clock2Increment"] as SettingsValuePrimitive<int?>).Value;
-                if (sv2i.HasValue)
-                    di.MemLocClock2Increment.SetValue(sv2i.Value);
-                else
-                    di.MemLocClock2Increment.RestoreOriginal();
+                    var sv2i = (this.settingsStore["Clock2Increment"] as SettingsValuePrimitive<int?>).Value;
+                    if (sv2i.HasValue)
+                        di.MemLocClock2Increment.SetValue(sv2i.Value);
+                    else
+                        di.MemLocClock2Increment.RestoreOriginal();
 
-                var sv3t = (this.settingsStore["Clock3BaseTime"] as SettingsValuePrimitive<int?>).Value;
-                if (sv3t.HasValue)
-                    di.MemLocClock3BaseTime.SetValue(sv3t.Value);
-                else
-                    di.MemLocClock3BaseTime.RestoreOriginal();
+                    var sv3t = (this.settingsStore["Clock3BaseTime"] as SettingsValuePrimitive<int?>).Value;
+                    if (sv3t.HasValue)
+                        di.MemLocClock3BaseTime.SetValue(sv3t.Value);
+                    else
+                        di.MemLocClock3BaseTime.RestoreOriginal();
 
-                var sv3i = (this.settingsStore["Clock3Increment"] as SettingsValuePrimitive<int?>).Value;
-                if (sv3i.HasValue)
-                    di.MemLocClock3Increment.SetValue(sv3i.Value);
-                else
-                    di.MemLocClock3Increment.RestoreOriginal();
-
+                    var sv3i = (this.settingsStore["Clock3Increment"] as SettingsValuePrimitive<int?>).Value;
+                    if (sv3i.HasValue)
+                        di.MemLocClock3Increment.SetValue(sv3i.Value);
+                    else
+                        di.MemLocClock3Increment.RestoreOriginal();
+                }
 
 
             }
