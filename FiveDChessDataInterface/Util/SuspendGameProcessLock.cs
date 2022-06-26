@@ -1,6 +1,7 @@
 ﻿using FiveDChessDataInterface.MemoryHelpers;
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace FiveDChessDataInterface.Util
 {
@@ -29,14 +30,32 @@ namespace FiveDChessDataInterface.Util
                 try
                 {
                     if (this.lockCnt == 1) // only suspend if this is the first time the lock has been acquired recursively
-                        KernelMethods.NtSuspendProcess(this.gameHandle);
+                    {
+                        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                        {
+                            KernelMethods.NtSuspendProcess(this.gameHandle);
+                        }
+                        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                        {
+                            KernelMethods.kill(this.gameHandle.ToInt32(), 19 /* SIGSTOP */);
+                        }
+                    }
 
                     a.Invoke();
                 }
                 finally
                 {
                     if (this.lockCnt == 1)  // only resume if this is the first time the lock has been acquired recursively
-                        KernelMethods.NtResumeProcess(this.gameHandle);
+                    {
+                        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                        {
+                            KernelMethods.NtResumeProcess(this.gameHandle);
+                        }
+                        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                        {
+                            KernelMethods.kill(this.gameHandle.ToInt32(), 18 /* SIGCONT */);
+                        }
+                    }
 
                     this.lockCnt--;
                 }

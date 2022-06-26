@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace FiveDChessDataInterface.MemoryHelpers
@@ -12,7 +13,17 @@ namespace FiveDChessDataInterface.MemoryHelpers
         {
             byte[] buffer = new byte[size];
             uint bytesRead = 0;
-            ReadProcessMemory(handle, address, buffer, size, ref bytesRead);
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                ReadProcessMemory(handle, address, buffer, size, ref bytesRead);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                var fs = File.OpenRead(String.Format("/proc/{0}/mem", handle.ToInt32()));
+                fs.Seek(address.ToInt64(), SeekOrigin.Begin);
+                bytesRead = (uint)fs.Read(buffer, 0, (int)size);
+                fs.Close();
+            }
 
             // validate read action
             if (bytesRead != size)
@@ -28,11 +39,20 @@ namespace FiveDChessDataInterface.MemoryHelpers
         public static void WriteMemory(IntPtr handle, IntPtr address, byte[] newData)
         {
             uint bytesWrittenCount = 0;
-            WriteProcessMemory(handle, address, newData, newData.Length, ref bytesWrittenCount);
-
-            // validate write action
-            if (bytesWrittenCount != newData.Length)
-                throw new Exception($"Write operation to address 0x{address.ToString("X8")} failed! Expected number of bytes written: {newData.Length}; Actual amount: {bytesWrittenCount}");
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                WriteProcessMemory(handle, address, newData, newData.Length, ref bytesWrittenCount);
+                // validate write action
+                if (bytesWrittenCount != newData.Length)
+                    throw new Exception($"Write operation to address 0x{address.ToString("X8")} failed! Expected number of bytes written: {newData.Length}; Actual amount: {bytesWrittenCount}");
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                var fs = File.OpenWrite(String.Format("/proc/{0}/mem", handle.ToInt32()));
+                fs.Seek(address.ToInt64(), SeekOrigin.Begin);
+                fs.Write(newData, 0, newData.Length);
+                fs.Close();
+            }
         }
 
 
@@ -42,6 +62,7 @@ namespace FiveDChessDataInterface.MemoryHelpers
 
         public static IntPtr AllocProcessMemory(IntPtr handle, int size, bool executable)
         {
+            // TODO: port to linux
             return VirtualAllocEx(handle, IntPtr.Zero, size, 0x00001000 | 0x00002000 /* MEM_COMMIT | MEM_RESERVE */, executable ? 0x40 /* PAGE_EXEC_READWRITE */ : 0x04 /* PAGE_READWRITE */);
         }
 
@@ -50,10 +71,12 @@ namespace FiveDChessDataInterface.MemoryHelpers
 
         public static IntPtr FreeProcessMemory(IntPtr handle, IntPtr baseAddress, int size)
         {
+            // TODO: port to linux
             return VirtualFreeEx(handle, baseAddress, size, 0x00008000 /* MEM_RELEASE */);
         }
 
 
+        // TODO: port to linux
         [DllImport("kernel32.dll", CharSet = CharSet.Ansi)]
         internal static extern IntPtr GetProcAddress(IntPtr hModule, string functionName);
 
@@ -66,6 +89,7 @@ namespace FiveDChessDataInterface.MemoryHelpers
 
         public static IntPtr CreateRemoteThread(IntPtr handle, IntPtr startAddress, int stackSize = 0, bool startSuspended = false)
         {
+            // TODO: port to linux
             return CreateRemoteThread(handle, IntPtr.Zero, stackSize, startAddress, IntPtr.Zero, startSuspended ? 4 : 0, IntPtr.Zero);
         }
 
@@ -95,13 +119,17 @@ namespace FiveDChessDataInterface.MemoryHelpers
         /// <returns>the old protection status</returns>
         public static FlPageProtect ChangePageProtection(IntPtr handle, IntPtr baseAddress, int size, FlPageProtect newProtectionValue)
         {
-            int oldProtect = 0;
-            VirtualProtectEx(handle, baseAddress, size, (int)newProtectionValue, ref oldProtect); // return value is always zero???
-            var error_code = Marshal.GetLastWin32Error();
-            if (error_code != 0)
-                throw new InvalidOperationException($"ChangePageProtection failed with result code: {error_code}");
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                int oldProtect = 0;
+                VirtualProtectEx(handle, baseAddress, size, (int)newProtectionValue, ref oldProtect); // return value is always zero???
+                var error_code = Marshal.GetLastWin32Error();
+                if (error_code != 0)
+                    throw new InvalidOperationException($"ChangePageProtection failed with result code: {error_code}");
 
-            return (FlPageProtect)oldProtect;
+                return (FlPageProtect)oldProtect;
+            }
+            return 0;
         }
 
         [Flags]
@@ -123,5 +151,7 @@ namespace FiveDChessDataInterface.MemoryHelpers
         [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
         public static extern bool FreeLibrary(IntPtr hModule);
 
+        [DllImport("libc", SetLastError = true)]
+        internal static extern int kill(int pid, int sig);
     }
 }
