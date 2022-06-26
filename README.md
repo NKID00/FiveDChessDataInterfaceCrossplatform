@@ -1,5 +1,19 @@
+# A cross-platform partial port of FiveDChessDataInterface
+![](https://github.com/NKID00/FiveDChessDataInterfaceCrossPlatform/actions/workflows/dotnet.yml/badge.svg?branch=master)
+
+A partial port of FiveDChessDataInterface which runs on Linux and Windows with the same dll file.
+
+## Important notes for Linux users
+
+The library may require root permission to access the memory of the game.
+
+Only a part of the library is ported and tested on Linux:
+
+* Memory access features are ported, partially tested and seemingly operational.
+
+* Assembly modification features are not ported currently.
+
 # 5D Chess With Multiverse Time Travel Data Interface
-![](https://github.com/GHXX/FiveDChessDataInterface/actions/workflows/dotnet.yml/badge.svg?branch=master)
 
 An **unofficial** C# (.Net Standard 2.0) library providing runtime memory-access to [5D Chess With Multiverse Time Travel](https://store.steampowered.com/app/1349230/5D_Chess_With_Multiverse_Time_Travel/).
 
